@@ -273,7 +273,8 @@ export default function App() {
             </div>
           )}
 
-          {hasEnv ? (
+          {/* Env vars list + sync */}
+          {hasEnv && !showManualGateway && (
             <>
               <div style={{ marginBottom: 12 }}>
                 {envEntries.map(([k, v], i) => (
@@ -295,11 +296,22 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Btn variant="accent" onClick={handleSync}>
                   {isMac ? '同步到 launchctl' : '同步到系统环境变量'}
                 </Btn>
                 <Btn onClick={load}>刷新</Btn>
+                <span
+                  onClick={() => setShowManualGateway(true)}
+                  style={{
+                    fontFamily: MONO, fontSize: 11, color: C.textMuted,
+                    cursor: 'pointer', marginLeft: 'auto',
+                    borderBottom: `1px solid transparent`,
+                    paddingBottom: 1, transition: 'color 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.target.style.color = C.accent; e.target.style.borderColor = C.accentBorder }}
+                  onMouseLeave={(e) => { e.target.style.color = C.textMuted; e.target.style.borderColor = 'transparent' }}
+                >自定义网关 →</span>
               </div>
               {syncResult && (
                 <div style={{
@@ -314,7 +326,32 @@ export default function App() {
                 </div>
               )}
             </>
-          ) : showManualGateway ? (
+          )}
+
+          {/* No env hint */}
+          {!hasEnv && !showManualGateway && (
+            <div>
+              <div style={{
+                fontSize: 13, color: C.textMuted, lineHeight: 1.7, marginBottom: 2,
+              }}>
+                未检测到 <span style={{ fontFamily: MONO, color: C.textSecondary }}>~/.claude/settings.json</span> 中的 env 配置
+              </div>
+              <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.7 }}>
+                请先在 Claude Code 中设置，或
+                <span
+                  onClick={() => setShowManualGateway(true)}
+                  style={{
+                    color: C.accent, cursor: 'pointer', marginLeft: 4,
+                    borderBottom: `1px solid ${C.accentBorder}`,
+                    paddingBottom: 1,
+                  }}
+                >手动填写网关</span>
+              </div>
+            </div>
+          )}
+
+          {/* Manual gateway form */}
+          {showManualGateway && (
             <div style={{ animation: 'fadeSlideIn 0.25s both cubic-bezier(0.16,1,0.3,1)' }}>
               <div style={{ marginBottom: 12 }}>
                 <label style={{
@@ -363,7 +400,7 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Btn variant="accent" onClick={handleSaveGateway}>保存</Btn>
-                <Btn onClick={() => setShowManualGateway(false)}>返回</Btn>
+                <Btn onClick={() => setShowManualGateway(false)}>← 返回</Btn>
               </div>
               {gatewaySaved === 'ok' && (
                 <div style={{
@@ -379,25 +416,6 @@ export default function App() {
                   border: `1px solid ${C.redBorder}`,
                 }}>✗ 保存失败</div>
               )}
-            </div>
-          ) : (
-            <div>
-              <div style={{
-                fontSize: 13, color: C.textMuted, lineHeight: 1.7, marginBottom: 2,
-              }}>
-                未检测到 <span style={{ fontFamily: MONO, color: C.textSecondary }}>~/.claude/settings.json</span> 中的 env 配置
-              </div>
-              <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.7 }}>
-                请先在 Claude Code 中设置，或
-                <span
-                  onClick={() => setShowManualGateway(true)}
-                  style={{
-                    color: C.accent, cursor: 'pointer', marginLeft: 4,
-                    borderBottom: `1px solid ${C.accentBorder}`,
-                    paddingBottom: 1,
-                  }}
-                >手动填写网关</span>
-              </div>
             </div>
           )}
         </Section>
