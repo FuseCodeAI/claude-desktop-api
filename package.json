@@ -19,9 +19,31 @@
     "@vitejs/plugin-react": "^4.3.1"
   },
   "build": {
-    "appId": "com.claude.desktop-syner",
+    "appId": "com.fusecode.claude-desktop-api",
+    "productName": "Claude Desktop API",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
+    ],
     "mac": {
-      "target": "dmg"
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "zip", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
     }
   }
 }
