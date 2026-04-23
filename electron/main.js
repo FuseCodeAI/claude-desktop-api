@@ -2,19 +2,32 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
-const { spawnSync } = require('child_process')
+const { spawnSync, spawn } = require('child_process')
+const os = require('os')
 
 const isDev = process.env.NODE_ENV !== 'production'
+const isMac = process.platform === 'darwin'
+const isWin = process.platform === 'win32'
 
-const HOME = process.env.HOME || require('os').homedir()
-const CLAUDE_DIR = path.join(HOME, 'Library', 'Application Support', 'Claude')
-const CLAUDE_3P_DIR = path.join(HOME, 'Library', 'Application Support', 'Claude-3p')
+// --- Platform-aware paths ---
+const HOME = os.homedir()
+
+function getAppData() {
+  if (isMac) return path.join(HOME, 'Library', 'Application Support')
+  if (isWin) return process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming')
+  return process.env.XDG_CONFIG_HOME || path.join(HOME, '.config')
+}
+
+const APP_DATA = getAppData()
+const CLAUDE_DIR = path.join(APP_DATA, 'Claude')
+const CLAUDE_3P_DIR = path.join(APP_DATA, 'Claude-3p')
 const CONFIG_LIB_DIR = path.join(CLAUDE_3P_DIR, 'configLibrary')
 const DEV_SETTINGS = path.join(CLAUDE_DIR, 'developer_settings.json')
 const DESKTOP_CONFIG = path.join(CLAUDE_3P_DIR, 'claude_desktop_config.json')
 const META_JSON = path.join(CONFIG_LIB_DIR, '_meta.json')
 const CC_SETTINGS = path.join(HOME, '.claude', 'settings.json')
 
+// --- Helpers ---
 function readJson(file, fallback = {}) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -24,8 +37,14 @@ function readJson(file, fallback = {}) {
 }
 
 function writeJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
-  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
+  const dir = path.dirname(file)
+  if (isMac) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+    fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
+  } else {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n')
+  }
 }
 
 function getAppliedGatewayConfig() {
@@ -37,6 +56,9 @@ function getAppliedGatewayConfig() {
   if (!cfg) return null
   return { id, ...cfg }
 }
+
+// --- IPC Handlers ---
+ipcMain.handle('get-platform', () => process.platform)
 
 ipcMain.handle('read-configs', () => {
   const devSettings = readJson(DEV_SETTINGS)
@@ -73,7 +95,17 @@ ipcMain.handle('sync-env-vars', () => {
   const errors = []
 
   for (const [key, val] of Object.entries(envVars)) {
-    const result = spawnSync('launchctl', ['setenv', key, String(val)])
+    let result
+    if (isMac) {
+      result = spawnSync('launchctl', ['setenv', key, String(val)])
+    } else if (isWin) {
+      result = spawnSync('setx', [key, String(val)], { shell: true })
+    } else {
+      // Linux: no universal system-level setenv, skip
+      errors.push(`${key}: not supported on this platform`)
+      continue
+    }
+
     if (result.status === 0) {
       synced.push(key)
     } else {
@@ -85,7 +117,7 @@ ipcMain.handle('sync-env-vars', () => {
 })
 
 ipcMain.handle('save-gateway', (_, { url, apiKey, authScheme }) => {
-  fs.mkdirSync(CONFIG_LIB_DIR, { recursive: true, mode: 0o700 })
+  fs.mkdirSync(CONFIG_LIB_DIR, { recursive: true })
 
   const meta = readJson(META_JSON, { entries: [] })
   const id = meta.appliedId || crypto.randomUUID()
@@ -112,25 +144,45 @@ ipcMain.handle('save-gateway', (_, { url, apiKey, authScheme }) => {
 })
 
 ipcMain.handle('restart-claude', () => {
-  spawnSync('pkill', ['-x', 'Claude'])
-  setTimeout(() => spawnSync('open', ['-a', 'Claude']), 800)
+  if (isMac) {
+    spawnSync('pkill', ['-x', 'Claude'])
+    setTimeout(() => spawn('open', ['-a', 'Claude']), 800)
+  } else if (isWin) {
+    spawnSync('taskkill', ['/IM', 'Claude.exe', '/F'], { shell: true })
+    setTimeout(() => {
+      const claudePath = path.join(
+        process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local'),
+        'Programs', 'claude', 'Claude.exe'
+      )
+      spawn(claudePath, [], { detached: true, stdio: 'ignore' }).unref()
+    }, 800)
+  }
 })
 
 ipcMain.handle('open-external', (_, url) => {
   shell.openExternal(url)
 })
 
+// --- Window ---
 function createWindow() {
-  const win = new BrowserWindow({
+  const winOptions = {
     width: 780,
     height: 640,
-    titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-  })
+  }
+
+  if (isMac) {
+    winOptions.titleBarStyle = 'hiddenInset'
+  } else {
+    winOptions.frame = true
+    winOptions.autoHideMenuBar = true
+  }
+
+  const win = new BrowserWindow(winOptions)
 
   if (isDev) {
     win.loadURL('http://localhost:5173')
@@ -141,7 +193,7 @@ function createWindow() {
 
 app.whenReady().then(createWindow)
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (!isMac) app.quit()
 })
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()

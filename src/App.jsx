@@ -128,9 +128,12 @@ export default function App() {
   const [gatewaySaved, setGatewaySaved] = useState(null)
   const [restarting, setRestarting] = useState(false)
   const [showManualGateway, setShowManualGateway] = useState(false)
+  const [platform, setPlatform] = useState('darwin')
 
   const load = async () => {
     if (!api) return
+    const p = await api.getPlatform()
+    setPlatform(p)
     const data = await api.readConfigs()
     setConfigs(data)
     if (data.gateway) {
@@ -175,6 +178,8 @@ export default function App() {
   const envEntries = configs ? Object.entries(configs.envVars || {}) : []
   const hasEnv = envEntries.length > 0
 
+  const isMac = platform === 'darwin'
+
   const inputStyle = {
     fontFamily: MONO, background: C.bg,
     border: `1px solid ${C.line}`, borderRadius: 3,
@@ -190,9 +195,9 @@ export default function App() {
     }}>
       {/* Title bar */}
       <div style={{
-        height: 44, WebkitAppRegion: 'drag',
+        height: isMac ? 44 : 36, WebkitAppRegion: isMac ? 'drag' : 'no-drag',
         background: C.bg, display: 'flex', alignItems: 'center',
-        paddingLeft: 80, borderBottom: `1px solid ${C.line}`,
+        paddingLeft: isMac ? 80 : 20, borderBottom: `1px solid ${C.line}`,
         flexShrink: 0,
       }}>
         <span style={{
@@ -291,7 +296,9 @@ export default function App() {
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Btn variant="accent" onClick={handleSync}>同步到系统</Btn>
+                <Btn variant="accent" onClick={handleSync}>
+                  {isMac ? '同步到 launchctl' : '同步到系统环境变量'}
+                </Btn>
                 <Btn onClick={load}>刷新</Btn>
               </div>
               {syncResult && (
