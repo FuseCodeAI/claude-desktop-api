@@ -64,19 +64,31 @@ ipcMain.handle('read-configs', () => {
   const devSettings = readJson(DEV_SETTINGS)
   const desktopConfig = readJson(DESKTOP_CONFIG)
   const ccSettings = readJson(CC_SETTINGS)
-  const gateway = getAppliedGatewayConfig()
+
+  // Try applied gateway first, then fall back to first saved entry
+  let gatewayCfg = getAppliedGatewayConfig()
+  if (!gatewayCfg) {
+    const meta = readJson(META_JSON, { entries: [] })
+    const entries = Array.isArray(meta.entries) ? meta.entries : []
+    if (entries.length > 0) {
+      const id = entries[0].id
+      const cfgPath = path.join(CONFIG_LIB_DIR, `${id}.json`)
+      const cfg = readJson(cfgPath, null)
+      if (cfg) gatewayCfg = { id, ...cfg }
+    }
+  }
 
   return {
     devMode: !!devSettings.allowDevTools,
     deploymentMode: desktopConfig.deploymentMode || null,
     envVars: ccSettings.env || {},
-    gateway: gateway
+    gateway: gatewayCfg
       ? {
-          url: gateway.inferenceGatewayBaseUrl || '',
-          authScheme: gateway.inferenceGatewayAuthScheme || 'bearer',
-          hasApiKey: !!gateway.inferenceGatewayApiKey,
-          apiKeyHint: gateway.inferenceGatewayApiKey
-            ? gateway.inferenceGatewayApiKey.slice(0, 6) + '••••••'
+          url: gatewayCfg.inferenceGatewayBaseUrl || '',
+          authScheme: gatewayCfg.inferenceGatewayAuthScheme || 'bearer',
+          hasApiKey: !!gatewayCfg.inferenceGatewayApiKey,
+          apiKeyHint: gatewayCfg.inferenceGatewayApiKey
+            ? gatewayCfg.inferenceGatewayApiKey.slice(0, 6) + '••••••'
             : '',
         }
       : null,
@@ -86,6 +98,29 @@ ipcMain.handle('read-configs', () => {
 ipcMain.handle('toggle-dev-mode', (_, enable) => {
   const current = readJson(DEV_SETTINGS)
   writeJson(DEV_SETTINGS, { ...current, allowDevTools: enable })
+})
+
+ipcMain.handle('toggle-gateway', (_, enable) => {
+  const desktopConfig = readJson(DESKTOP_CONFIG)
+  const meta = readJson(META_JSON, { entries: [] })
+  if (enable) {
+    // Restore appliedId from the first entry if available
+    const entries = Array.isArray(meta.entries) ? meta.entries : []
+    const id = meta.appliedId || (entries[0] && entries[0].id)
+    if (!id) return { error: 'no-config' }
+    const cfgPath = path.join(CONFIG_LIB_DIR, `${id}.json`)
+    if (!fs.existsSync(cfgPath)) return { error: 'no-config' }
+    meta.appliedId = id
+    writeJson(META_JSON, meta)
+    writeJson(DESKTOP_CONFIG, { ...desktopConfig, deploymentMode: '3p' })
+  } else {
+    // Clear appliedId but keep entries for re-enabling later
+    meta.appliedId = null
+    writeJson(META_JSON, meta)
+    const { deploymentMode, ...rest } = desktopConfig
+    writeJson(DESKTOP_CONFIG, rest)
+  }
+  return { ok: true }
 })
 
 ipcMain.handle('sync-env-vars', () => {
