@@ -152,6 +152,15 @@ export default function App() {
     setConfigs((c) => ({ ...c, devMode: val }))
   }
 
+  const handleToggleGateway = async (val) => {
+    const result = await api.toggleGateway(val)
+    if (result?.error === 'no-config') {
+      setShowManualGateway(true)
+      return
+    }
+    setConfigs((c) => ({ ...c, deploymentMode: val ? '3p' : null }))
+  }
+
   const handleSync = async () => {
     setSyncResult(null)
     const result = await api.syncEnvVars()
@@ -253,23 +262,36 @@ export default function App() {
 
           {configs && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 14,
             }}>
-              <StatusDot active={configs.deploymentMode === '3p'} />
-              <span style={{ fontSize: 13, color: C.textSecondary }}>
-                {configs.deploymentMode === '3p'
-                  ? '第三方网关已激活'
-                  : '使用默认推理端点'}
-              </span>
-              {configs.gateway?.url && (
-                <span style={{
-                  fontFamily: MONO, fontSize: 10, color: C.textMuted,
-                  marginLeft: 'auto',
-                }}>
-                  {configs.gateway.url}
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <StatusDot active={configs.deploymentMode === '3p'} />
+                <span style={{ fontSize: 14, color: C.textPrimary, fontWeight: 400 }}>
+                  {configs.deploymentMode === '3p'
+                    ? '第三方网关'
+                    : '原生登录'}
                 </span>
-              )}
+                <span style={{
+                  fontFamily: MONO, fontSize: 11, color: C.textMuted,
+                  marginLeft: 10,
+                }}>
+                  deploymentMode
+                </span>
+                {configs.gateway?.url && configs.deploymentMode === '3p' && (
+                  <span style={{
+                    fontFamily: MONO, fontSize: 10, color: C.textMuted,
+                    marginLeft: 12,
+                  }}>
+                    {configs.gateway.url}
+                  </span>
+                )}
+              </div>
+              <Toggle
+                on={configs.deploymentMode === '3p'}
+                onChange={handleToggleGateway}
+              />
             </div>
           )}
 

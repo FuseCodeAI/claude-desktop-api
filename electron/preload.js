@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('api', {
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   readConfigs: () => ipcRenderer.invoke('read-configs'),
   toggleDevMode: (enable) => ipcRenderer.invoke('toggle-dev-mode', enable),
+  toggleGateway: (enable) => ipcRenderer.invoke('toggle-gateway', enable),
   syncEnvVars: () => ipcRenderer.invoke('sync-env-vars'),
   saveGateway: (cfg) => ipcRenderer.invoke('save-gateway', cfg),
   restartClaude: () => ipcRenderer.invoke('restart-claude'),
